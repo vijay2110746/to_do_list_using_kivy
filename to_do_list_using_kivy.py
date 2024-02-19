@@ -13,6 +13,7 @@ import mysql.connector
 global_username=None
 global_password=None
 datatask=None
+check=[]
 conn=mysql.connector.connect(host='localhost',user='root',password='vijay',database='login')
 try:
     if conn.is_connected():
@@ -216,10 +217,10 @@ class LoginApp(MDApp):
     def build(self):
         return Builder.load_string(KV)
 
-    def add_task(self, task_name):
+    def add_task(self, task_name,checked=False):
         if task_name.strip():
             print(task_name)
-            task_card = TaskCard(task_name=task_name)
+            task_card = TaskCard(task_name=task_name,checked=checked)
             self.root.get_screen('third').ids.task_list.add_widget(task_card)
             self.root.get_screen('third').ids.task_input.text = ''
 
@@ -261,16 +262,18 @@ class LoginApp(MDApp):
                 global_username=username
                 global_password=password
                 self.root.current='third'
-                q='select tasks from users where user = %s and password = %s'
+                q='select tasks , checked from users where user = %s and password = %s'
                 v=(username,password)
                 cur.execute(q,v)
                 res=cur.fetchone()
-                # print(res[0])
+                print(res)
                 r=res[0].split('::::::')
+                s=res[1].split('::::::')
                 for i in r:
-                    self.add_task(i)
-
-
+                    if i in s:
+                        self.add_task(i,checked=True)
+                    else:
+                        self.add_task(i)
             else:
                 print("Login credentials dont match!!!")
         else:
@@ -284,9 +287,16 @@ class LoginApp(MDApp):
                 tasks.append(widget.task_name)
 
         print(tasks)
-        
+        print('checked', check)
         r=''
+        s=''
         ts=len(tasks)
+        for i in check:
+            if i==check[-1]:
+                s+=i
+            else:
+                s+=i+'::::::'
+
         for task in reversed(range(ts)):
             if tasks[task]==tasks[0]:
                 r+=tasks[task]
@@ -294,15 +304,15 @@ class LoginApp(MDApp):
                 r+=tasks[task]+'::::::'
         
         if global_username and global_password:
-            q="update users set tasks = %s where password=%s and user = %s"
-            v=(r,global_password,global_username)
-            cur.execute(q,v)
+            q = "UPDATE users SET tasks = %s, checked = %s WHERE password = %s AND user = %s"
+            v = (r, s, global_password, global_username)
+            cur.execute(q, v)
             conn.commit()
 
         print('tasks ',tasks)
 
 class TaskCard(MDCard):
-    def __init__(self, task_name, **kwargs):
+    def __init__(self, task_name,checked=False, **kwargs):
         super().__init__(**kwargs)
         self.task_name = task_name
         self.orientation = 'horizontal'
@@ -310,8 +320,10 @@ class TaskCard(MDCard):
         self.height = dp(72)
         self.spacing = dp(8)
         self.elevation=dp(6)
+        # self.check=[]
         
-        checkbox = MDCheckbox()
+        checkbox = MDCheckbox(active=checked)
+        checkbox.bind(active=self.on_check)
         task_label = MDLabel(text=task_name)
         delete_button = MDIconButton(icon='delete')
         delete_button.bind(on_release=self.delete_task)
@@ -324,7 +336,12 @@ class TaskCard(MDCard):
         app = MDApp.get_running_app()
         app.root.get_screen('third').ids.task_list.remove_widget(self)
         # print(app.root.get_screen('third').ids.task_list)
-        
+    
+    def on_check(self, checkbox, value):
+        if value:
+            check.append(self.task_name)
+        else:
+            check.remove(self.task_name)
     
 
 if __name__ == '__main__':
